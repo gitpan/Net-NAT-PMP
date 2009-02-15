@@ -1,6 +1,6 @@
 ---
 name: Net-NAT-PMP
-version: 0.9.1
+version: 0.9.2
 author:
   - 'David Caldwell <david@porkrind.org>'
 abstract: Poke holes in a router's NAT using the nat-pmp protocol
@@ -12,7 +12,7 @@ requires:
 provides:
   Net::NAT::PMP:
     file: lib/Net/NAT/PMP.pm
-    version: 0.9.1
+    version: 0.9.2
 generated_by: Module::Build version 0.2806
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.2.html

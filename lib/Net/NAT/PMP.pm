@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 package Net::NAT::PMP;
-our $VERSION = '0.9.1';
+our $VERSION = '0.9.2';
 
 use IO::Socket::INET;
 sub Port { 5351 }
@@ -25,9 +25,14 @@ sub get_router_address {
     } elsif ($^O eq 'linux') {
         open ROUTE, '<', '/proc/net/route' or die "Couldn't open /proc/net/route: $!";
         while (<ROUTE>) {
-            $gateway = $1 if /^0.0.0.0\s+(\d+\.\d+\.\d+\.\d+)/;
+            $gateway = $1 if /^\S+\s+00000000\s+([0-9A-F]+)/;
         }
-        clse ROUTE;
+        close ROUTE;
+        if ($gateway) {
+            # Stupid linux prints it as a hex number in network byte order. The following should work on both
+            # big and little endian machines. I don't have any big endian's on hand to test though.
+            $gateway = join(".", unpack "CCCC", pack "L", hex $gateway);
+        }
     } else { die "Automatically discovering the gateway address is not supported on $^O yet! Please pass the address of your router to Net:NAT::PMP::new()" }
     $gateway;
 }
