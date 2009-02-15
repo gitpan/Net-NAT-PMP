@@ -1,3 +1,10 @@
+Net::NAT::PMP (0.9.3)
+
+  * Remove debug code that dumped the response packet in
+    create_mapping. Doh!
+
+ -- David Caldwell <david@porkrind.org>  Sun, 15 Feb 2009 12:41:42 -0800
+
 Net::NAT::PMP (0.9.2)
 
   * Made linux get_router_address() actually work.

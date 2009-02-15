@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 package Net::NAT::PMP;
-our $VERSION = '0.9.2';
+our $VERSION = '0.9.3';
 
 use IO::Socket::INET;
 sub Port { 5351 }
@@ -28,11 +28,9 @@ sub get_router_address {
             $gateway = $1 if /^\S+\s+00000000\s+([0-9A-F]+)/;
         }
         close ROUTE;
-        if ($gateway) {
-            # Stupid linux prints it as a hex number in network byte order. The following should work on both
-            # big and little endian machines. I don't have any big endian's on hand to test though.
-            $gateway = join(".", unpack "CCCC", pack "L", hex $gateway);
-        }
+        # Stupid linux prints it as a hex number in network byte order. The following should work on both
+        # big and little endian machines. I don't have any big endian's on hand to test though.
+        $gateway = join(".", unpack "CCCC", pack "L", hex $gateway) if $gateway;
     } else { die "Automatically discovering the gateway address is not supported on $^O yet! Please pass the address of your router to Net:NAT::PMP::new()" }
     $gateway;
 }
@@ -45,15 +43,6 @@ sub new {
         socket => IO::Socket::INET->new(PeerAddr => $router_ip, PeerPort => Net::NAT::PMP::Port, Proto=>'udp'),#, Timeout => .25),
     }, $class;
     $self->{socket} ? $self : undef;
-}
-
-sub dumpbytes {
-    my @bytes = unpack "C*", $_[1];
-    print "$_[0]: ";
-    for (@bytes) {
-        printf "%02x ", $_;
-    }
-    print "\n";
 }
 
 sub external_address {
@@ -78,7 +67,6 @@ sub create_mapping {
     $self->socket->send(pack ("CCnnnN", Version, $op, 0, $internal_port, $external_port, $lifetime_seconds));
     my $packet;
     $self->socket->recv($packet, 16);
-    dumpbytes("packet", $packet);
     my %response;
     @response{qw(vers op result_code time internal_port external_port lifetime_seconds)} = unpack "CCnNnnN", $packet;
     die "Got unexpected op $response{op} instead of @{[128 + $op]}" unless $response{op} == 128 + $op;
@@ -97,7 +85,7 @@ __END__
 
 =head1 NAME
 
-Net::NAT::PMP - Poke holes in a router's NAT using the nat-pmp protocol
+Net::NAT::PMP - Poke holes in a router's NAT using the NAT-PMP protocol
 
 =head1 SYNOPSIS
 
@@ -133,7 +121,7 @@ returns the address as a string in dotted quad format.
 
 This asks the router to open a up an external port and map it to
 $internal_port. The mapping will last for $lifetime_seconds. According
-to the RFC draft, the mapping should be rerequested when have the
+to the RFC draft, the mapping should be re-requested when half the
 lifetime has elapsed. Net::NAT::PMP does not do this for you.
 
 If $external_port is zero then the router will pick a port for you.
@@ -165,11 +153,14 @@ This will destroy a mapping.
 =head1 BUGS
 
 This barely implements the protocol. Specifically no attempt is made
-to retry or time out network transactions. Patches are welcome.
+to retry or time out network transactions. This means that if you try
+to talk to the wrong IP address or your router doesn't support
+NAT-PMP, the external_address() and create_mapping() functions will
+hang. Yeah, that's weak. Patches are welcome.
 
 This protocol relies on being able to get the IP address of the
 router. There appears to be no standard POSIX way to do this, so the
-code has to support each OS separately. Currenly only Mac OS X and
+code has to support each OS separately. Currently only Mac OS X and
 Linux are supported. Linux should be fairly stable since it is
 implemented by reading /proc/net/route which is what the route program
 itself does. The Mac OS X version, however, scrapes data from netstat
