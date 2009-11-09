@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 package Net::NAT::PMP;
-our $VERSION = '0.9.3';
+our $VERSION = '0.9.4';
 
 use IO::Socket::INET;
 sub Port { 5351 }
@@ -12,6 +12,13 @@ sub Version { 0 } # protocol version we support
 
 sub socket    { $_[0]->{socket} }
 sub router_ip { $_[0]->{router_ip} }
+
+sub error {
+    my ($self, $message)  = @_;
+    return $self->{error} unless defined $message;
+    $self->{error} = $message;
+    undef
+}
 
 sub get_router_address {
     my $gateway;
@@ -48,13 +55,13 @@ sub new {
 sub external_address {
     my ($self) = @_;
     my $op = 0;
-    $self->socket->send(pack("CC", Version, $op));
+    return $self->error("send: $!") unless defined $self->socket->send(pack("CC", Version, $op));
     my $packet;
-    $self->socket->recv($packet, 12);
+    return $self->error("recv: $!") unless defined $self->socket->recv($packet, 12);
     my (%response, @external_address);
     (@response{qw(vers op result_code time)}, @external_address) = unpack("CCnNCCCC", $packet);
-    die "Got unexpected op $response{op} instead of @{[128 + $op]}" unless $response{op} == 128 + $op;
-    die "Got unexpected result_code $response{result_code} instead of 0" unless $response{result_code} == 0;
+    return $self->error("Got unexpected op $response{op} instead of @{[128 + $op]}") unless $response{op} == 128 + $op;
+    return $self->error("Got unexpected result_code $response{result_code} instead of 0") unless $response{result_code} == 0;
     my $dotted = join('.', @external_address);
     return $dotted;
 }
@@ -64,13 +71,13 @@ sub create_mapping {
     $external_port = $internal_port unless defined $external_port; # wheres my //= !!!
     $lifetime_seconds = 3600 unless defined $lifetime_seconds;
     my $op = $udp ? 1 : 2;
-    $self->socket->send(pack ("CCnnnN", Version, $op, 0, $internal_port, $external_port, $lifetime_seconds));
+    return $self->error("send: $!") unless defined $self->socket->send(pack ("CCnnnN", Version, $op, 0, $internal_port, $external_port, $lifetime_seconds));
     my $packet;
-    $self->socket->recv($packet, 16);
+    return $self->error("recv: $!") unless defined $self->socket->recv($packet, 16);
     my %response;
     @response{qw(vers op result_code time internal_port external_port lifetime_seconds)} = unpack "CCnNnnN", $packet;
-    die "Got unexpected op $response{op} instead of @{[128 + $op]}" unless $response{op} == 128 + $op;
-    die "Got unexpected result_code $response{result_code} instead of 0" unless $response{result_code} == 0;
+    return $self->error("Got unexpected op $response{op} instead of @{[128 + $op]}") unless $response{op} == 128 + $op;
+    return $self->error("Got unexpected result_code $response{result_code} instead of 0") unless $response{result_code} == 0;
     return $external_port;
 }
 
@@ -92,7 +99,9 @@ Net::NAT::PMP - Poke holes in a router's NAT using the NAT-PMP protocol
  use Net::NAT::PMP;
  $nat_pmp = new Net::NAT::PMP or die "Net::NAT::PMP: $!";
  $external_address = $nat_pmp->external_address;
+ die $nat_pmp->error unless defined $external_address;
  $external_port = $nat_pmp->create_mapping(40000);
+ die $nat_pmp->error unless defined $external_port;
 
 =head1 DESCRIPTION
 
@@ -114,8 +123,9 @@ new().
 
 =item B<C<external_address()>>
 
-This queries the router for its external address. On success it
-returns the address as a string in dotted quad format.
+This queries the router for its external address. On success it returns the
+address as a string in dotted quad format. On failure it returns undef (call
+the error() method for details).
 
 =item B<C<create_mapping($internal_port, $external_port, $lifetime_seconds, $udp)>>
 
@@ -144,9 +154,16 @@ assume this will be the same as the port you requested. The router is
 free to choose a different port number if it doesn't like the
 requested port number for whatever reason.
 
+On error, create_mapping() will return undef. When this happens you can
+check the error() method for details.
+
 =item B<C<destroy_mapping($internal_port, $udp)>>
 
 This will destroy a mapping.
+
+=item B<C<error()>>
+
+This will return a string with details about the last error that occurred.
 
 =back
 

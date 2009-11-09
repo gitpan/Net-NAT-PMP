@@ -1,3 +1,9 @@
+Net::NAT::PMP (0.9.4)
+
+  * Add better error handling.
+
+ -- David Caldwell <david@porkrind.org>  Sun, 08 Nov 2009 23:44:33 -0800
+
 Net::NAT::PMP (0.9.3)
 
   * Remove debug code that dumped the response packet in
